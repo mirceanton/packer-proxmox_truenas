@@ -1,0 +1,96 @@
+source "proxmox" "truenas" {
+  # ============================
+  # Proxmox Connection Settings
+  # ============================
+  proxmox_url              = "{{ proxmox_api_url }}"
+  username                 = "{{ proxmox_api_token_id }}"
+  token                    = "{{ proxmox_api_token_secret }}"
+  insecure_skip_tls_verify = {{ proxmox_api_insecure | default(true) | string | lower }}
+
+  # ============================
+  # General Settings
+  # ============================
+  node       = "{{ truenas_tpl_node }}"
+  vm_id      = "{{ truenas_tpl_id }}"
+  vm_name    = "{{ truenas_tpl_name | default('TrueNAS-tpl') }}"
+  qemu_agent = false
+
+  # ============================
+  # ISO Settings
+  # ============================
+  iso_file    = "{{ truenas_tpl_iso }}"
+  unmount_iso = {{ truenas_tpl_iso_unmount | default(true) | string | lower }}
+
+  # ============================
+  # Resource Settings
+  # ============================
+  cores  = "{{ truenas_tpl_cpu_cores | default(4) }}" # Minimum cpu requirement as per the official doc
+  memory = "{{ truenas_tpl_memory | default(8192) }}" # Minimum ram requirement as per the official doc
+
+  # ============================
+  # Disk Settings
+  # ============================
+  scsi_controller = "{{ truenas_tpl_scsihw | default('virtio-scsi-pci') }}"
+  {% for disk in truenas_tpl_disks %}
+  disks {
+    disk_size         = "{{ disk.size | default('16G') }}"
+    storage_pool      = "{{ disk.storage_pool }}"
+    storage_pool_type = "{{ disk.storage_pool_type }}"
+  }
+  {% endfor %}
+
+  # =============================================
+  # NETWORK
+  # =============================================
+  {% for nic in truenas_tpl_networks %}
+  network_adapters {
+    bridge   = "{{ nic.bridge }}"
+    firewall = {{ nic.firewall | default(false) | string | lower }}
+    model    = "{{ nic.model | default('virtio') }}"
+  }
+  {% endfor %}
+
+  # ============================
+  # Boot Settings
+  # ============================
+  boot      = "{{ truenas_tpl_boot_order | default('c') }}"
+  boot_wait = "{{ truenas_tpl_boot_wait | default('30s') }}"
+  boot_command = [
+    # Select the "Install/Upgrade" option
+    "<enter>",
+    "<wait1>",
+
+    # Select the only disk present to install the OS on
+    "<spacebar>", "<enter>",
+    "<wait1>",
+    "<enter>",
+
+    # Enter the root password
+    "{{ truenas_tpl_root_pass }}", "<wait1>", "<tab>",
+    "{{ truenas_tpl_root_pass }}", "<wait1>", "<enter>",
+    "<wait1>",
+
+    # Boot via BIOS
+    "<enter>",
+
+    # Wait for OS installation
+    "<wait120>",
+
+    # Install complete, select OK
+    "<enter>",
+
+    # Shutdown system
+    "<down>", "<down>", "<down>", "<enter>",
+
+    # Wait for system shutdown
+    "<wait30>",
+  ]
+
+  ssh_username = "root"
+  communicator = "none"
+}
+
+build {
+  name    = "truenas-13.0-1"
+  sources = ["source.proxmox.truenas"]
+}
